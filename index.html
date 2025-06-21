@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Playable Piano Sequencer</title>
+
+  <!-- Tone.js -->
+  <script src="https://unpkg.com/tone@latest/build/Tone.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- workspace tabs ------------------------------------------------>
+  <div id="workspaceBar">
+    <button id="addWS">＋</button>
+    <div id="tabs"></div>
+  </div>
+
+  <!-- key selectors ------------------------------------------------->
+  <div id="keySelect">
+    <label>Key
+      <select id="tonicSelect">
+        <option>C</option><option>C#</option><option>Db</option><option>D</option>
+        <option>D#</option><option>Eb</option><option>E</option><option>F</option>
+        <option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+        <option>Ab</option><option>A</option><option>A#</option><option>Bb</option>
+        <option>B</option><option>Cb</option>
+      </select>
+    </label>
+    <select id="modeSelect">
+      <option value="major">Major</option>
+      <option value="minor">Minor</option>
+    </select>
+  </div>
+
+  <!-- transport ----------------------------------------------------->
+  <div id="transport">
+    <button id="playBtn">▶︎ Play</button>
+    <button id="pauseBtn">‖ Pause</button>
+    <button id="stopBtn">■ Stop</button>
+    <label>Tempo
+      <input id="tempo" type="number" value="120" min="30" max="300"> BPM
+    </label>
+  </div>
+
+  <!-- piano + grid -------------------------------------------------->
+  <table id="piano"></table>
+  <table id="grid" class="seq"></table>
+
+  <script defer src="script.js"></script>
+</body>
+</html>

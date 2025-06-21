@@ -1,0 +1,83 @@
+:root{
+  /* piano */
+  --white-key:#fff;
+  --black-key:#111;
+
+  /* grid colours */
+  --grid-bg   : #444;   /* empty square              */
+  --grid-out  : #333;   /* note outside current key  */
+  --grid-green: #228b22;/* green note (left-click)   */
+  --grid-blue : #3a7bfd;/* blue  note (right-click)  */
+
+  /* highlight + selection */
+  --sel:#ff8c00;
+
+  /* sizes */
+  --key-w:25px;
+  --key-h:150px;
+  --cell :calc(var(--key-w) + 1px);
+}
+
+/* ---------- BASIC LAYOUT ------------------------------------------ */
+body{margin:0;padding:1rem;background:#222;color:#ddd;
+     font-family:system-ui,sans-serif;user-select:none;text-align:center;}
+table{border-collapse:collapse;margin-inline:auto;}
+td   {padding:0;text-align:center;}
+#transport{margin:0 0 1rem;display:flex;gap:.5rem;justify-content:center;}
+#transport input{width:4rem;}
+
+/* ---------- PIANO -------------------------------------------------- */
+.octave{font-size:1.5rem;font-weight:700;border-left:2px solid #777;border-right:2px solid #777;}
+.note{font-size:.9rem;}
+
+.key{width:var(--key-w);height:var(--key-h);
+     border:1px solid #444;display:inline-block;cursor:pointer;}
+.white{background:var(--white-key);}
+.black{background:var(--black-key);color:#eee;}
+.held{filter:brightness(75%);}
+
+/* ---------- GRID --------------------------------------------------- */
+.seq{position:relative;}
+.seq td{width:var(--cell);height:var(--cell);background:var(--grid-bg);
+        border:1px solid #555;cursor:pointer;}
+.seq td.outkey {background:var(--grid-out);}
+.seq td.on     {background:var(--grid-green);}
+.seq td.blue   {background:var(--grid-blue);}
+.seq td.selected{background:var(--sel)!important;}
+
+/* fingering numbers */
+.seq td.fingering{color:#fff;font-size:.8rem;font-weight:700;
+                  line-height:var(--cell);text-align:center;}
+
+/* cursor & lasso ---------------------------------------------------- */
+#cursor{position:absolute;left:0;right:0;height:2px;background:red;
+        pointer-events:none;transform:translateY(-2px);}
+#lasso{position:absolute;border:1px dashed var(--sel);
+       background:rgba(255,140,0,.15);pointer-events:none;display:none;}
+
+/* key selector & sticky piano -------------------------------------- */
+#keySelect{display:inline-flex;gap:.5rem;margin-bottom:.5rem;
+           align-items:center;justify-content:center;}
+#keySelect select{padding:.2rem;}
+#piano{position:sticky;top:0;background:#222;z-index:10;}
+
+/********************  NEW – workspace tabs  *************************/
+#workspaceBar{
+  display:flex; align-items:center; gap:.25rem; margin-bottom:.5rem;
+}
+#workspaceBar button{
+  padding:.2rem .5rem; border:1px solid #555; background:#555; color:#ddd;
+  cursor:pointer; font-weight:700;
+}
+#tabs{
+  display:flex; flex-wrap:wrap; gap:.25rem;
+}
+.tab{
+  padding:.2rem .6rem; border:1px solid #777; background:#444; color:#ddd;
+  cursor:pointer; user-select:none;
+}
+.tab.active{ background:#888; color:#000; }
+/********************************************************************/
+
+/* >>> the rest of your stylesheet is identical to the previous version <<< */
+/* (piano, grid colours, fingering rule, sticky header, etc.) */

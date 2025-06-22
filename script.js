@@ -2,7 +2,7 @@
  * CONFIGURATION
  * ----------------------------------------------------------------*/
 const MAX_WS = 10;                     // up to 10 workspaces
-const OCTAVES = [2, 3, 4, 5];
+const OCTAVES = [2, 3, 4, 5, 6];
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const SAMPLE_ROOTS = ['A','C','D#','F#'];
 const ROWS = 200, COLS = OCTAVES.length * NOTE_NAMES.length, CELL_PX = 26;

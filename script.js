@@ -43,7 +43,7 @@ if(!calibBtn.parentNode) transport.insertBefore(calibBtn, midiBtn.nextSibling);
 /* ------------------------------------------------------------------
  * STATIC PIANO & GRID CONSTRUCTION
  * ----------------------------------------------------------------*/
-const labelCells=[], keySpans=[];
+const labelCells=[], keySpans=[], keyTds=[];   /* 🟡 new array */
 (function buildUI(){
   const rOct=piano.insertRow(), rLab=piano.insertRow(), rKey=piano.insertRow();
   OCTAVES.forEach(o=>{
@@ -53,6 +53,7 @@ const labelCells=[], keySpans=[];
       const lab=rLab.insertCell(); lab.className='note'; labelCells.push(lab);
       /* key row */
       const kc=rKey.insertCell();
+      keyTds.push(kc);                            /* 🟡 remember it */
       const div=document.createElement('div');
       div.className=`key ${n.includes('#')?'black':'white'}`; div.dataset.note=n+o;
       const span=document.createElement('span'); span.className='botlabel'; div.appendChild(span);
@@ -157,10 +158,20 @@ function finishCalibration(low, high){
   applyRangeTint();
   calibBtn.disabled=false;
 }
-function applyRangeTint(){
+function applyRangeTint() {
   document.querySelectorAll('.key').forEach(k=>{
     const m = noteNameToMidi(k.dataset.note);
-    k.classList.toggle('available', m>=rangeLow && m<=rangeHigh);
+    const avail = m >= rangeLow && m <= rangeHigh;
+
+    /* the key itself (existing behaviour) */
+    k.classList.toggle('available', avail);
+
+    /* the note-name cell just above */
+    const idx = NOTES_LINEAR.indexOf(k.dataset.note);
+    labelCells[idx].classList.toggle('availableCell', avail);
+
+    /* the <td> that wraps the key div */
+    keyTds[idx].classList.toggle('availableCell', avail);
   });
 }
 

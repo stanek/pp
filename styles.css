@@ -32,26 +32,91 @@ td   {padding:0;text-align:center;}
 
 .key{width:var(--key-w);height:var(--key-h);
      border:1px solid #444;display:inline-block;cursor:pointer;}
+/* let the key’s inner label sit on top of its surface */
+.key{ position:relative; }
+
+/* bottom-edge label */
+.key .botlabel{
+  position:absolute; bottom:2px; left:0; width:100%;
+  text-align:center;
+  font-size:.7rem;        /* a couple steps smaller */
+  font-weight:700;
+  pointer-events:none;    /* ignore mouse */
+}
+
+/* colour contrast */
+.white .botlabel{ color:#000; }
+.black .botlabel{ color:#fff; }
 .white{background:var(--white-key);}
 .black{background:var(--black-key);color:#eee;}
-.held{filter:brightness(75%);}
+/* existing line for white keys – keep it */
+.white.held{ filter:brightness(75%); }
+
+/* NEW: make a pressed black key visibly lighter */
+.black.held{
+  background:#555;         /* medium-grey so the change is clear   */
+  box-shadow:0 0 4px #aaa; /* subtle glow helps on dark screens    */
+}
 
 /* ---------- GRID --------------------------------------------------- */
 .seq{position:relative;}
-.seq td{width:var(--cell);height:var(--cell);background:var(--grid-bg);
-        border:1px solid #555;cursor:pointer;}
+.seq td{
+  width:var(--cell);
+  height:var(--cell);
+  max-height:var(--cell);      /* <- new, belt-and-braces */
+  background:var(--grid-bg);
+  border:1px solid #555;
+  cursor:pointer;
+
+  position:relative;           /* <- anchor for fingering digits */
+  overflow:hidden;             /* just in case */
+}
 .seq td.outkey {background:var(--grid-out);}
 .seq td.on     {background:var(--grid-green);}
 .seq td.blue   {background:var(--grid-blue);}
 .seq td.selected{background:var(--sel)!important;}
 
 /* fingering numbers */
-.seq td.fingering{color:#fff;font-size:.8rem;font-weight:700;
-                  line-height:var(--cell);text-align:center;}
+/* .seq td.fingering{color:#fff;font-size:.8rem;font-weight:700;
+                  line-height:var(--cell);text-align:center;} */
+/* render two stacked digits nicely */
+.fing{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:.75rem;
+  font-weight:700;
+  color:#fff;
+  pointer-events:none;
+  line-height:1rem;          /* keeps the 26 px square height */
+}
+/* two-digit layout */
+.fing.top{  top:-1px;  }
+.fing.bot{  bottom:-1px; }
+
+/* single digit — vertically centred */
+.fing.single{
+  top:50%;
+  transform:translate(-50%,-50%);
+}
 
 /* cursor & lasso ---------------------------------------------------- */
-#cursor{position:absolute;left:0;right:0;height:2px;background:red;
-        pointer-events:none;transform:translateY(-2px);}
+/* RED PLAYBACK BAR */
+#cursor{
+  position:absolute;
+  top:0;                       /* anchor to the wrapper’s top edge   */
+  left:0;
+  width:100%;
+  height:2px;
+  background:red;
+  pointer-events:none;
+
+  /* smooth slide – duration is overwritten from JS on Play() */
+  transition:transform linear;
+
+  /* sit well above the table */
+  z-index:9999;
+}
 #lasso{position:absolute;border:1px dashed var(--sel);
        background:rgba(255,140,0,.15);pointer-events:none;display:none;}
 
@@ -81,3 +146,4 @@ td   {padding:0;text-align:center;}
 
 /* >>> the rest of your stylesheet is identical to the previous version <<< */
 /* (piano, grid colours, fingering rule, sticky header, etc.) */
+#gridWrap{ position:relative; display:inline-block; }

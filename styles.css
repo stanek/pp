@@ -166,3 +166,4 @@ td   {padding:0;text-align:center;}
 .modal-content button{margin-top:1rem;padding:.4rem .9rem;}
 
 #pianoContainer { position: relative; }
+td.availableCell { background:#ededed; }

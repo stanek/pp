@@ -13,13 +13,22 @@ const PREVIEW_DUR = 0.25;
 const STORE_KEY   = 'pianoSequencerWorkspaces';
 
 /* ------------------------------------------------------------------
- * DOM SHORTCUTS
+ * DOM SHORTCUTS  (+ Transport-bar MIDI button is injected below)
  * ----------------------------------------------------------------*/
 const $=id=>document.getElementById(id);
 const piano=$('piano'), grid=$('grid');
 const playB=$('playBtn'), pauseB=$('pauseBtn'), stopB=$('stopBtn');
 const tempo=$('tempo'), tonicSel=$('tonicSelect'), modeSel=$('modeSelect');
 const addBtn=$('addWS'), tabsBox=$('tabs'), modeDrop=$('playMode');
+const transport=$('transport');
+
+/* ----------  Inject “Connect Piano” button ----------------------- */
+const midiBtn = Object.assign(document.createElement('button'),{
+  id:'midiBtn',
+  textContent:'Connect Piano',
+  style:'background:green'
+});
+transport.prepend(midiBtn);           // left-most in transport bar
 
 /* ------------------------------------------------------------------
  * WRAP GRID  (cursor + lasso)
@@ -49,6 +58,13 @@ const NOTES_LINEAR = OCTAVES.flatMap(o=>NOTE_NAMES.map(n=>n+o));
 const COL_PC       = NOTES_LINEAR.map(n=>pcOf(n.replace(/\d+/,'')));
 const NAT_PC={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 const MAJ=[0,2,4,5,7,9,11], MIN=[0,2,3,5,7,8,10];
+
+/* MIDI: helper converts MIDI note-number (0=C-1) -> “C4” etc. */
+function midiToNoteName(num){
+  const name=NOTE_NAMES[num%12];
+  const octave=Math.floor(num/12)-1;
+  return name+octave;
+}
 
 /* ------------------------------------------------------------------
  * STATIC PIANO + GRID
@@ -80,6 +96,87 @@ const sampler=new Tone.Sampler({
   baseUrl:'https://tonejs.github.io/audio/salamander/'
 }).toDestination();
 const preview=col=>sampler.triggerAttackRelease(NOTES_LINEAR[col], PREVIEW_DUR, Tone.now());
+
+/* ------------------------------------------------------------------
+ * WEB MIDI  ⭐ NEW ⭐
+ * ----------------------------------------------------------------*/
+let midiAccess=null, midiInput=null;
+
+async function connectMIDI(){
+  try{
+    midiAccess = await navigator.requestMIDIAccess();
+  }catch(e){
+    alert('Web MIDI access was denied.');
+    return;
+  }
+  /* choose the first input that sends note data */
+  const inputs=[...midiAccess.inputs.values()];
+  if(!inputs.length){
+    alert('No MIDI inputs found. Plug in your keyboard and try again.');
+    return;
+  }
+  midiInput = inputs[0];
+  midiInput.addEventListener('midimessage', handleMIDI);
+  midiAccess.addEventListener('statechange', handleStateChange);
+
+  midiBtn.textContent='Disconnect';
+  midiBtn.style.background='#e65a4f';      // orangey-red
+}
+
+function disconnectMIDI(){
+  if(midiInput){
+    midiInput.removeEventListener('midimessage', handleMIDI);
+    midiInput=null;
+  }
+  if(midiAccess){
+    midiAccess.removeEventListener('statechange', handleStateChange);
+    midiAccess=null;
+  }
+  midiBtn.textContent='Connect Piano';
+  midiBtn.style.background='green';
+}
+
+function handleStateChange(e){
+  if(e.port.type==='input' && e.port.state==='disconnected'){
+    disconnectMIDI();
+  }
+}
+
+const ongoingHeld=new Set();          // track which notes we triggered
+
+function handleMIDI(evt){
+  const [status,noteNum,vel] = evt.data;
+  const type = status & 0xF0;         // ignore channel
+
+  const noteName = midiToNoteName(noteNum);
+  const velocity = vel / 127;         // 0-1 for Tone.js
+
+  const keyDiv = piano.querySelector(`.key[data-note="${noteName}"]`);
+
+  if((type===0x90 && vel!==0)){       // Note On
+    sampler.triggerAttack(noteName, Tone.now(), velocity);
+    ongoingHeld.add(noteName);
+    manualHeld.add(noteName);         // Wait-mode logic
+    if(keyDiv) keyDiv.classList.add('held');
+  }
+  else if(type===0x80 || (type===0x90 && vel===0)){ // Note Off
+    if(ongoingHeld.has(noteName)){
+      sampler.triggerRelease(noteName, Tone.now());
+      ongoingHeld.delete(noteName);
+    }
+    manualHeld.delete(noteName);
+    if(keyDiv) keyDiv.classList.remove('held');
+  }
+}
+
+/* button click toggles connection */
+midiBtn.addEventListener('click',()=>{
+  if(midiInput) disconnectMIDI();
+  else connectMIDI();
+});
+
+/* safety: clean up when leaving page */
+window.addEventListener('beforeunload',disconnectMIDI);
 
 /* ------------------------------------------------------------------
  * SCALE LABELS + SHADING
@@ -248,7 +345,7 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ------------------------------------------------------------------
- * MANUAL PIANO TRACKING (for Wait Mode)
+ * MANUAL PIANO TRACKING (mouse/touch) – unchanged
  * ----------------------------------------------------------------*/
 const manualHeld=new Set();
 piano.addEventListener('pointerdown',e=>{

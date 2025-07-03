@@ -420,19 +420,33 @@ window.addEventListener('pointerup', ()=>{
 let timer=null, rowPtr=0, lastRow=0, heldDuringPlay=new Set(), beatEnd=0;
 const msPerRow = () => 60000 / (+tempo.value || 120);
 
-const cursor = (()=>{                     // red playhead
-  const c=document.createElement('div');
-  c.id='cursor'; Object.assign(c.style,{position:'absolute',top:0,left:0,width:'100%',
-    height:'2px',background:'red',pointerEvents:'none',transform:'translateY(-2px)',
-    transition:'transform 0ms linear',zIndex:9999});
-  piano.parentNode.insertBefore(c, piano); return c;
-})();
-const wrap = (()=>{                       // wraps grid for scrolling
-  const w=document.createElement('div');
-  w.id='gridWrap'; Object.assign(w.style,{position:'relative',display:'inline-block',overflow:'hidden'});
-  grid.parentNode.insertBefore(w, grid); w.appendChild(grid);
-  return w;
-})();
+// ----- wrap the grid in a positioned container -----
+const wrap = document.createElement('div');
+wrap.id = 'gridWrap';
+Object.assign(wrap.style, {
+  position: 'relative',     // 👈 makes this the positioning context
+  display:  'inline-block',
+  overflow: 'hidden'
+});
+grid.parentNode.insertBefore(wrap, grid); // move wrap in
+wrap.appendChild(grid);                   // and drop the grid inside
+
+// ----- playback cursor that now starts at the top of the grid -----
+const cursor = document.createElement('div');
+cursor.id = 'cursor';
+Object.assign(cursor.style, {
+  position:   'absolute',
+  top:        0,
+  left:       0,
+  width:      '100%',
+  height:     '2px',
+  background: 'red',
+  pointerEvents: 'none',
+  transform:  'translateY(-2px)',
+  transition: 'transform 0ms linear',
+  zIndex:     9999
+});
+wrap.appendChild(cursor);                // cursor lives inside wrap
 const lasso=document.createElement('div'); lasso.id='lasso'; wrap.appendChild(lasso);
 
 function resetVisuals(){

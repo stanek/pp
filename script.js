@@ -94,18 +94,54 @@ const preview = c => sampler.triggerAttackRelease(NOTES_LINEAR[c], PREVIEW_DUR, 
 let midiAccess=null, midiInput=null;
 let rangeLow = Number.NEGATIVE_INFINITY, rangeHigh = Number.POSITIVE_INFINITY;
 
-/* --------  Modal helpers  -------- */
-function showModal(html){
-  let ov=$('calibOverlay');
-  if(!ov){
-    ov=document.createElement('div'); ov.id='calibOverlay';
-    ov.innerHTML='<div id="calibBox"></div>';
+/* replace the existing showModal definition with this one */
+function showModal(html) {
+  let ov = document.getElementById('calibOverlay');
+
+  /* 1️⃣  Create the overlay only once */
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'calibOverlay';
+
+    /* inline styles so we don’t rely on external CSS */
+    Object.assign(ov.style, {
+      position:      'fixed',
+      inset:         0,                       // top:0 right:0 bottom:0 left:0
+      background:    'rgba(0,0,0,.45)',
+      display:       'flex',
+      alignItems:    'center',
+      justifyContent:'center',
+      zIndex:        10000,
+      fontFamily:    'system-ui'
+    });
+
+    /* inner box that holds the text */
+    const box = document.createElement('div');
+    box.id = 'calibBox';
+    Object.assign(box.style, {
+      background:'#fafafa',
+      borderRadius:'12px',
+      padding:'24px 32px',
+      maxWidth:'290px',
+      textAlign:'center',
+      lineHeight:'1.4',
+      boxShadow:'0 6px 24px rgba(0,0,0,.3)'
+    });
+
+    ov.appendChild(box);
     document.body.appendChild(ov);
   }
-  $('calibBox').innerHTML=html;
-  ov.style.display='flex';
+
+  /* 2️⃣  Put the new message inside and reveal the overlay */
+  document.getElementById('calibBox').innerHTML = html;
+  ov.style.display = 'flex';
 }
-const hideModal=()=>{ const o=$('calibOverlay'); if(o) o.style.display='none'; };
+
+/* hideModal stays the same */
+const hideModal = () => {
+  const o = document.getElementById('calibOverlay');
+  if (o) o.style.display = 'none';
+};
 
 /* --------  Calibration flow  -------- */
 let calibActive=false, calibStage=0, tmpLow=null;

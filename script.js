@@ -1,73 +1,47 @@
+/* ==================================================================
+ *  Playable-Piano – FULL script.js (July 2025)
+ *  — Sequencer + Tone.js Sampler + Web-MIDI + Calibration —
+ * =================================================================*/
+
 /* ------------------------------------------------------------------
  * CONFIGURATION
  * ----------------------------------------------------------------*/
 const MAX_WS = 10;
-const OCTAVES      = [2,3,4,5];
+const OCTAVES      = [2,3,4,5];                               // onscreen octaves
 const NOTE_NAMES   = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const SAMPLE_ROOTS = ['A','C','D#','F#'];
+const SAMPLE_ROOTS = ['A','C','D#','F#'];                     // samples we load
 const ROWS = 200;
 const COLS = OCTAVES.length * NOTE_NAMES.length;
-const CELL_PX = 26;              // grid square
-const ROW_PX  = CELL_PX + 1;     // +1px collapsed border
-const PREVIEW_DUR = 0.25;
+const CELL_PX = 26;                                           // grid cell size
+const ROW_PX  = CELL_PX + 1;                                  // incl. collapsed brd
+const PREVIEW_DUR = 0.25;                                     // sec
 const STORE_KEY   = 'pianoSequencerWorkspaces';
 
 /* ------------------------------------------------------------------
- * DOM SHORTCUTS  (+ Transport-bar MIDI button is injected below)
+ * GLOBAL STATE (sets used in multiple sections)
+ * ----------------------------------------------------------------*/
+const manualHeld   = new Set();       // notes currently held via mouse or MIDI
+const ongoingHeld  = new Set();       // notes we triggered via MIDI so we can release
+
+/* ------------------------------------------------------------------
+ * DOM SHORTCUTS & TRANSPORT BAR CONTROLS
  * ----------------------------------------------------------------*/
 const $=id=>document.getElementById(id);
-const piano=$('piano'), grid=$('grid');
+const piano=$('piano'), grid=$('grid'), transport=$('transport');
 const playB=$('playBtn'), pauseB=$('pauseBtn'), stopB=$('stopBtn');
 const tempo=$('tempo'), tonicSel=$('tonicSelect'), modeSel=$('modeSelect');
 const addBtn=$('addWS'), tabsBox=$('tabs'), modeDrop=$('playMode');
-const transport=$('transport');
 
-/* ----------  Inject “Connect Piano” button ----------------------- */
-const midiBtn = Object.assign(document.createElement('button'),{
-  id:'midiBtn',
-  textContent:'Connect Piano',
-  style:'background:green'
-});
-transport.prepend(midiBtn);           // left-most in transport bar
-
-/* ------------------------------------------------------------------
- * WRAP GRID  (cursor + lasso)
- * ----------------------------------------------------------------*/
-const wrap=document.createElement('div');
-wrap.id='gridWrap';
-wrap.style.position='relative';
-wrap.style.display='inline-block';
-wrap.style.overflow='hidden';
-grid.parentNode.insertBefore(wrap, grid);
-wrap.appendChild(grid);
-
-const cursor=Object.assign(document.createElement('div'),{
-  id:'cursor',
-  style:'position:absolute;top:0;left:0;width:100%;height:2px;'+
-        'background:red;pointer-events:none;transform:translateY(-2px);'+
-        'transition:transform 0ms linear;z-index:9999' });
-const lasso =Object.assign(document.createElement('div'),{id:'lasso'});
-wrap.append(cursor, lasso);
+/* ---------- Connect / Calibrate buttons (inject if not present) -- */
+const midiBtn  = $('midiBtn') || Object.assign(document.createElement('button'),
+                    {id:'midiBtn',textContent:'Connect Piano',style:'background:green'});
+const calibBtn = $('calibBtn')|| Object.assign(document.createElement('button'),
+                    {id:'calibBtn',textContent:'Calibrate',disabled:true});
+if(!midiBtn.parentNode)  transport.prepend(midiBtn);
+if(!calibBtn.parentNode) transport.insertBefore(calibBtn, midiBtn.nextSibling);
 
 /* ------------------------------------------------------------------
- * NOTE HELPERS
- * ----------------------------------------------------------------*/
-const pcOf=n=>({C:0,'B#':0,'C#':1,'Db':1,D:2,'D#':3,'Eb':3,E:4,'Fb':4,'E#':5,
-F:5,'F#':6,'Gb':6,G:7,'G#':8,'Ab':8,A:9,'A#':10,'Bb':10,B:11,'Cb':11}[n]);
-const NOTES_LINEAR = OCTAVES.flatMap(o=>NOTE_NAMES.map(n=>n+o));
-const COL_PC       = NOTES_LINEAR.map(n=>pcOf(n.replace(/\d+/,'')));
-const NAT_PC={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
-const MAJ=[0,2,4,5,7,9,11], MIN=[0,2,3,5,7,8,10];
-
-/* MIDI: helper converts MIDI note-number (0=C-1) -> “C4” etc. */
-function midiToNoteName(num){
-  const name=NOTE_NAMES[num%12];
-  const octave=Math.floor(num/12)-1;
-  return name+octave;
-}
-
-/* ------------------------------------------------------------------
- * STATIC PIANO + GRID
+ * STATIC PIANO & GRID CONSTRUCTION
  * ----------------------------------------------------------------*/
 const labelCells=[], keySpans=[];
 (function buildUI(){
@@ -75,117 +49,165 @@ const labelCells=[], keySpans=[];
   OCTAVES.forEach(o=>{
     const oc=rOct.insertCell(); oc.colSpan=NOTE_NAMES.length; oc.textContent=o; oc.className='octave';
     NOTE_NAMES.forEach(n=>{
+      /* labels row */
       const lab=rLab.insertCell(); lab.className='note'; labelCells.push(lab);
+      /* key row */
       const kc=rKey.insertCell();
       const div=document.createElement('div');
       div.className=`key ${n.includes('#')?'black':'white'}`; div.dataset.note=n+o;
-      const span=document.createElement('span'); span.className='botlabel'; div.appendChild(span); keySpans.push(span);
-      kc.appendChild(div);
+      const span=document.createElement('span'); span.className='botlabel'; div.appendChild(span);
+      kc.appendChild(div); keySpans.push(span);
     });
   });
+  /* grid */
   for(let r=0;r<ROWS;r++){ const row=grid.insertRow(); for(let c=0;c<COLS;c++) row.insertCell(); }
 })();
 
 /* ------------------------------------------------------------------
- * AUDIO
+ * NOTE HELPERS
+ * ----------------------------------------------------------------*/
+const pcOf=n=>({C:0,'B#':0,'C#':1,'Db':1,D:2,'D#':3,'Eb':3,E:4,'Fb':4,'E#':5,
+F:5,'F#':6,'Gb':6,G:7,'G#':8,'Ab':8,A:9,'A#':10,'Bb':10,B:11,'Cb':11}[n]);
+const NOTES_LINEAR = OCTAVES.flatMap(o=>NOTE_NAMES.map(n=>n+o));
+const NAT_PC={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const MAJ=[0,2,4,5,7,9,11], MIN=[0,2,3,5,7,8,10];
+
+const noteNameToMidi = n => {
+  const m = n.match(/^([A-G]#?)(\d+)$/); return (+m[2]+1)*12 + NOTE_NAMES.indexOf(m[1]);
+};
+const midiToNoteName = n => NOTE_NAMES[n%12] + (Math.floor(n/12)-1);
+
+/* ------------------------------------------------------------------
+ * AUDIO – Tone.js Sampler
  * ----------------------------------------------------------------*/
 const sampler=new Tone.Sampler({
   urls:Object.fromEntries(
-    OCTAVES.flatMap(o=>SAMPLE_ROOTS.map(n=>[`${n}${o}`,n.replace('#','s')+o+'.mp3']))
+    OCTAVES.flatMap(o=>SAMPLE_ROOTS.map(n=>[`${n}${o}`, n.replace('#','s')+o+'.mp3']))
   ),
   baseUrl:'https://tonejs.github.io/audio/salamander/'
 }).toDestination();
-const preview=col=>sampler.triggerAttackRelease(NOTES_LINEAR[col], PREVIEW_DUR, Tone.now());
+const preview = c => sampler.triggerAttackRelease(NOTES_LINEAR[c], PREVIEW_DUR, Tone.now());
 
 /* ------------------------------------------------------------------
- * WEB MIDI  ⭐ NEW ⭐
+ * WEB-MIDI + CALIBRATION
  * ----------------------------------------------------------------*/
 let midiAccess=null, midiInput=null;
+let rangeLow = Number.NEGATIVE_INFINITY, rangeHigh = Number.POSITIVE_INFINITY;
 
+/* --------  Modal helpers  -------- */
+function showModal(html){
+  let ov=$('calibOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='calibOverlay';
+    ov.innerHTML='<div id="calibBox"></div>';
+    document.body.appendChild(ov);
+  }
+  $('calibBox').innerHTML=html;
+  ov.style.display='flex';
+}
+const hideModal=()=>{ const o=$('calibOverlay'); if(o) o.style.display='none'; };
+
+/* --------  Calibration flow  -------- */
+let calibActive=false, calibStage=0, tmpLow=null;
+function startCalibration(autoTriggered){
+  calibActive=true; calibStage=0; tmpLow=null;
+  showModal(`<h2>Keyboard Calibration</h2>
+             <p>Please press the <strong>lowest note</strong> on your MIDI keyboard.</p>
+             <p><small>We need your instrument’s true range so the on-screen piano matches what you can play.</small></p>`);
+  if(!autoTriggered) midiBtn.focus();
+}
+function finishCalibration(low, high){
+  rangeLow=low; rangeHigh=high; calibActive=false; hideModal();
+  applyRangeTint();
+  calibBtn.disabled=false;
+}
+function applyRangeTint(){
+  document.querySelectorAll('.key').forEach(k=>{
+    const m = noteNameToMidi(k.dataset.note);
+    k.classList.toggle('available', m>=rangeLow && m<=rangeHigh);
+  });
+}
+
+/* --------  Connect / disconnect  -------- */
 async function connectMIDI(){
   try{
     midiAccess = await navigator.requestMIDIAccess();
   }catch(e){
-    alert('Web MIDI access was denied.');
-    return;
+    alert('Web-MIDI access was denied.'); return;
   }
-  /* choose the first input that sends note data */
-  const inputs=[...midiAccess.inputs.values()];
-  if(!inputs.length){
-    alert('No MIDI inputs found. Plug in your keyboard and try again.');
-    return;
-  }
+  const inputs = [...midiAccess.inputs.values()];
+  if(!inputs.length){ alert('No MIDI inputs detected. Plug in your keyboard and try again.'); return; }
+
   midiInput = inputs[0];
   midiInput.addEventListener('midimessage', handleMIDI);
-  midiAccess.addEventListener('statechange', handleStateChange);
+  midiAccess.addEventListener('statechange', e=>{
+    if(e.port.type==='input' && e.port.state==='disconnected') disconnectMIDI();
+  });
 
   midiBtn.textContent='Disconnect';
-  midiBtn.style.background='#e65a4f';      // orangey-red
-}
+  midiBtn.style.background='#e65a4f';
+  calibBtn.disabled=false;
 
+  /* auto-calibrate on first connection if we haven’t yet */
+  if(rangeLow===Number.NEGATIVE_INFINITY) startCalibration(true);
+}
 function disconnectMIDI(){
-  if(midiInput){
-    midiInput.removeEventListener('midimessage', handleMIDI);
-    midiInput=null;
-  }
-  if(midiAccess){
-    midiAccess.removeEventListener('statechange', handleStateChange);
-    midiAccess=null;
-  }
+  if(midiInput)   midiInput.removeEventListener('midimessage', handleMIDI);
+  midiAccess=null; midiInput=null;
   midiBtn.textContent='Connect Piano';
   midiBtn.style.background='green';
+  calibBtn.disabled=true;
+  document.querySelectorAll('.key.available').forEach(k=>k.classList.remove('available'));
 }
 
-function handleStateChange(e){
-  if(e.port.type==='input' && e.port.state==='disconnected'){
-    disconnectMIDI();
-  }
-}
-
-const ongoingHeld=new Set();          // track which notes we triggered
-
+/* --------  MIDI message handler  -------- */
 function handleMIDI(evt){
-  const [status,noteNum,vel] = evt.data;
-  const type = status & 0xF0;         // ignore channel
-
+  const [status, noteNum, vel] = evt.data;
+  const msgType = status & 0xF0;                     // mask channel
   const noteName = midiToNoteName(noteNum);
-  const velocity = vel / 127;         // 0-1 for Tone.js
+  const velocity = vel / 127;
 
+  /* ----- Calibration logic ----- */
+  if(calibActive && msgType===0x90 && vel){
+    if(calibStage===0){
+      tmpLow = noteNum;
+      calibStage=1;
+      showModal(`<h2>Great!</h2>
+                 <p>Now press the <strong>highest note</strong> on your keyboard.</p>`);
+    }else if(calibStage===1){
+      finishCalibration(tmpLow, noteNum);
+    }
+  }
+
+  /* ----- Normal playback logic ----- */
   const keyDiv = piano.querySelector(`.key[data-note="${noteName}"]`);
-
-  if((type===0x90 && vel!==0)){       // Note On
+  if(msgType===0x90 && vel){                     // Note On
     sampler.triggerAttack(noteName, Tone.now(), velocity);
-    ongoingHeld.add(noteName);
-    manualHeld.add(noteName);         // Wait-mode logic
+    ongoingHeld.add(noteName); manualHeld.add(noteName);
     if(keyDiv) keyDiv.classList.add('held');
   }
-  else if(type===0x80 || (type===0x90 && vel===0)){ // Note Off
-    if(ongoingHeld.has(noteName)){
-      sampler.triggerRelease(noteName, Tone.now());
-      ongoingHeld.delete(noteName);
-    }
+  else if(msgType===0x80 || (msgType===0x90 && vel===0)){ // Note Off
+    if(ongoingHeld.delete(noteName)) sampler.triggerRelease(noteName, Tone.now());
     manualHeld.delete(noteName);
     if(keyDiv) keyDiv.classList.remove('held');
   }
 }
 
-/* button click toggles connection */
-midiBtn.addEventListener('click',()=>{
-  if(midiInput) disconnectMIDI();
-  else connectMIDI();
-});
-
-/* safety: clean up when leaving page */
-window.addEventListener('beforeunload',disconnectMIDI);
+/* --------  Button wiring  -------- */
+midiBtn.onclick  = () => midiInput ? disconnectMIDI() : connectMIDI();
+calibBtn.onclick = () => startCalibration(false);
+window.addEventListener('beforeunload', disconnectMIDI);
 
 /* ------------------------------------------------------------------
  * SCALE LABELS + SHADING
  * ----------------------------------------------------------------*/
-function spelledScale(t,m){
-  const iv=m==='minor'?MIN:MAJ,root=pcOf(t),letters=['C','D','E','F','G','A','B'],idx=letters.indexOf(t[0]);
-  const pcs=[],names=[];
+function spelledScale(tonic, mode){
+  const iv = mode==='minor'? MIN : MAJ;
+  const root = pcOf(tonic), letters = ['C','D','E','F','G','A','B'];
+  const idx=letters.indexOf(tonic[0]);
+  const pcs=[], names=[];
   for(let i=0;i<7;i++){
-    const L=letters[(idx+i)%7],nat=NAT_PC[L],tgt=(root+iv[i])%12;
+    const L=letters[(idx+i)%7], nat=NAT_PC[L], tgt=(root+iv[i])%12;
     let d=(tgt-nat+12)%12; if(d>6)d-=12;
     let acc=''; if(d===1)acc='♯'; if(d===2)acc='♯♯'; if(d===-1)acc='♭'; if(d===-2)acc='♭♭';
     pcs.push(tgt); names.push(L+acc);
@@ -193,19 +215,21 @@ function spelledScale(t,m){
   return {pcs,names};
 }
 function updateKeyLabels(){
-  const {pcs,names}=spelledScale(tonicSel.value,modeSel.value);
-  const set=new Set(pcs),map={}; names.forEach((n,i)=>map[pcs[i]]=n);
-  labelCells.forEach((c,i)=>c.textContent=map[COL_PC[i]]??'');
-  keySpans  .forEach((s,i)=>s.textContent=map[COL_PC[i]]??'');
+  const {pcs,names}=spelledScale(tonicSel.value, modeSel.value);
+  const pcSet=new Set(pcs), pcNameMap={}; names.forEach((n,i)=>pcNameMap[pcs[i]]=n);
+  labelCells.forEach((c,i)=>c.textContent = pcNameMap[pcOf(NOTES_LINEAR[i].replace(/\d+/,''))] ?? '');
+  keySpans  .forEach((s,i)=>s.textContent = pcNameMap[pcOf(NOTES_LINEAR[i].replace(/\d+/,''))] ?? '');
   for(let r=0;r<ROWS;r++){
     const cells=grid.rows[r].cells;
-    for(let c=0;c<COLS;c++) set.has(COL_PC[c])?cells[c].classList.remove('outkey')
-                                             :cells[c].classList.add   ('outkey');
+    for(let c=0;c<COLS;c++){
+      pcSet.has(pcOf(NOTES_LINEAR[c].replace(/\d+/,''))) ? cells[c].classList.remove('outkey')
+                                                         : cells[c].classList.add   ('outkey');
+    }
   }
   saveAll();
 }
-tonicSel.addEventListener('change',updateKeyLabels);
-modeSel .addEventListener('change',updateKeyLabels);
+tonicSel.addEventListener('change', updateKeyLabels);
+modeSel .addEventListener('change', updateKeyLabels);
 
 /* ------------------------------------------------------------------
  * TWO-DIGIT FINGERINGS
@@ -219,96 +243,112 @@ function renderFings(td){
   td.classList.add('fingering');
 }
 const addFing   = (td,d)=>{ if((td.dataset.fing||'').includes(d))return;
-  td.dataset.fing=((td.dataset.fing||'')+d).slice(-2); renderFings(td);};
+  td.dataset.fing=((td.dataset.fing||'')+d).slice(-2); renderFings(td); };
 const clearFing = td     =>{ delete td.dataset.fing; renderFings(td); };
 
 /* ------------------------------------------------------------------
- * WORKSPACES (state now includes playMode)
+ * WORKSPACES  (state includes playMode, etc.)
  * ----------------------------------------------------------------*/
 let workspaces=[], current=0;
 function gatherState(){
-  const green=[],blue=[],fings=[];
+  const green=[], blue=[], fings=[];
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
     const td=grid.rows[r].cells[c], idx=r*COLS+c;
     if(td.classList.contains('on'))   green.push(idx);
     if(td.classList.contains('blue')) blue .push(idx);
-    if(td.dataset.fing) fings.push([idx,td.dataset.fing]);
+    if(td.dataset.fing) fings.push([idx, td.dataset.fing]);
   }
-  return {key:tonicSel.value,mode:modeSel.value,tempo:tempo.value,playMode:modeDrop.value,green,blue,fings};
+  return {key:tonicSel.value, mode:modeSel.value, tempo:tempo.value,
+          playMode:modeDrop.value, green, blue, fings};
 }
-function applyState(s){
+function applyState(st){
+  /* wipe */
   grid.querySelectorAll('td').forEach(td=>{
     td.classList.remove('on','blue','fingering','selected');
     td.innerHTML=''; delete td.dataset.fing;
   });
-  if(!s){ updateKeyLabels(); return; }
-  tonicSel.value=s.key || tonicSel.value;
-  modeSel.value =s.mode|| modeSel.value;
-  tempo .value  =s.tempo||tempo.value;
-  modeDrop.value=s.playMode||'playback';
-  s.green?.forEach(i=>grid.rows[i/COLS|0].cells[i%COLS].classList.add('on'));
-  s.blue ?.forEach(i=>grid.rows[i/COLS|0].cells[i%COLS].classList.add('blue'));
-  s.fings?.forEach(([i,d])=>{ const td=grid.rows[i/COLS|0].cells[i%COLS]; td.dataset.fing=d; renderFings(td); });
+  if(!st){ updateKeyLabels(); return; }
+  tonicSel.value=st.key || tonicSel.value;
+  modeSel .value=st.mode|| modeSel.value;
+  tempo   .value=st.tempo||tempo.value;
+  modeDrop.value=st.playMode||'playback';
+  st.green?.forEach(i=>grid.rows[i/COLS|0].cells[i%COLS].classList.add('on'));
+  st.blue ?.forEach(i=>grid.rows[i/COLS|0].cells[i%COLS].classList.add('blue'));
+  st.fings?.forEach(([i,d])=>{ const td=grid.rows[i/COLS|0].cells[i%COLS]; td.dataset.fing=d; renderFings(td); });
   updateKeyLabels();
 }
-function saveAll(){ workspaces[current].state=gatherState(); localStorage.setItem(STORE_KEY,JSON.stringify(workspaces)); }
+function saveAll(){ workspaces[current].state=gatherState(); localStorage.setItem(STORE_KEY, JSON.stringify(workspaces)); }
 
 function buildTabs(){
   tabsBox.innerHTML='';
   workspaces.forEach((ws,i)=>{
     const t=document.createElement('div'); t.className='tab'; t.textContent=ws.name;
-    t.onclick=()=>{ if(i===current){ const n=prompt('Rename workspace:',ws.name);
-      if(n&&n.trim()){ ws.name=n.trim(); t.textContent=n; saveAll(); } } else activateTab(i); };
+    t.onclick=()=>{ if(i===current){
+      const n=prompt('Rename workspace:', ws.name);
+      if(n&&n.trim()){ ws.name=n.trim(); t.textContent=n; saveAll(); }
+    } else activateTab(i); };
     tabsBox.appendChild(t);
   });
-  [...tabsBox.children].forEach((el,i)=>el.classList.toggle('active',i===current));
+  [...tabsBox.children].forEach((el,i)=>el.classList.toggle('active', i===current));
 }
 function activateTab(i){
-  stop();                               // ← stop any running playback
-  saveAll(); current=i; buildTabs(); applyState(workspaces[i].state);
+  stop(); saveAll(); current=i; buildTabs(); applyState(workspaces[i].state);
 }
-(function initWS(){
-  try{ workspaces=JSON.parse(localStorage.getItem(STORE_KEY)||'null')||[]; }catch{}
-  if(!workspaces.length) workspaces=[{name:'Workspace 1',state:null}];
+(function initWorkspaces(){
+  try{workspaces=JSON.parse(localStorage.getItem(STORE_KEY)||'null')||[];}catch{}
+  if(!workspaces.length) workspaces=[{name:'Workspace 1', state:null}];
   buildTabs(); applyState(workspaces[0].state);
 })();
-addBtn.onclick=()=>{ if(workspaces.length<MAX_WS){
-  workspaces.push({name:`Workspace ${workspaces.length+1}`,state:null});
-  buildTabs(); activateTab(workspaces.length-1);}};
+addBtn.onclick=()=>{ if(workspaces.length>=MAX_WS) return;
+  workspaces.push({name:`Workspace ${workspaces.length+1}`, state:null});
+  buildTabs(); activateTab(workspaces.length-1);
+};
 
 /* ------------------------------------------------------------------
- * GRID INTERACTION (green/blue + fingerings) – unchanged
+ * GRID INTERACTION (pointer events, selection, fingerings)
  * ----------------------------------------------------------------*/
-const sel=new Set();let tmp=new Set();
-let down=false,drag=false,sRow=0,sCol=0, hover=null;
-const isNote=td=>td.classList.contains('on')||td.classList.contains('blue');
-grid.addEventListener('contextmenu',e=>e.preventDefault());
+const sel=new Set(); let tmpSel=new Set();
+let down=false, drag=false, sRow=0, sCol=0, hover=null;
+const isNote=td=>td.classList.contains('on') || td.classList.contains('blue');
 
-grid.addEventListener('pointerover',e=>{
+/* no context menu on grid */
+grid.addEventListener('contextmenu', e=>e.preventDefault());
+
+/* hover / drag-selection */
+grid.addEventListener('pointerover', e=>{
   hover=e.target.closest('td')||null;
-  if(!down||!hover) return;
-  const r=hover.parentNode.rowIndex,c=hover.cellIndex;
-  if(!drag&&(r!==sRow||c!==sCol)){ drag=true; lasso.style.display='block'; }
+  if(!down || !hover) return;
+  const r=hover.parentNode.rowIndex, c=hover.cellIndex;
+  if(!drag && (r!==sRow || c!==sCol)){ drag=true; lasso.style.display='block'; }
   if(drag){
-    const [minR,maxR]=[Math.min(sRow,r),Math.max(sRow,r)],
-          [minC,maxC]=[Math.min(sCol,c),Math.max(sCol,c)];
-    Object.assign(lasso.style,{display:'block',left:minC*CELL_PX+'px',top:minR*CELL_PX+'px',
-      width:(maxC-minC+1)*CELL_PX+'px',height:(maxR-minR+1)*CELL_PX+'px'});
-    tmp.forEach(td=>td.classList.remove('selected')); tmp.clear();
-    for(let R=minR;R<=maxR;R++){ const cells=grid.rows[R].cells;
-      for(let C=minC;C<=maxC;C++){ const td=cells[C];
-        if(isNote(td)){td.classList.add('selected'); tmp.add(td);} } }
+    const [minR,maxR]=[Math.min(sRow,r), Math.max(sRow,r)],
+          [minC,maxC]=[Math.min(sCol,c), Math.max(sCol,c)];
+    Object.assign(lasso.style,{
+      display:'block', left:minC*CELL_PX+'px', top:minR*CELL_PX+'px',
+      width:(maxC-minC+1)*CELL_PX+'px', height:(maxR-minR+1)*CELL_PX+'px'
+    });
+    tmpSel.forEach(td=>td.classList.remove('selected')); tmpSel.clear();
+    for(let R=minR;R<=maxR;R++){
+      const cells=grid.rows[R].cells;
+      for(let C=minC;C<=maxC;C++){
+        const td=cells[C]; if(isNote(td)){ td.classList.add('selected'); tmpSel.add(td); }
+      }
+    }
   }
 });
-grid.addEventListener('pointerdown',e=>{
+/* pointer down */
+grid.addEventListener('pointerdown', e=>{
   const td=e.target.closest('td'); if(!td) return;
-  down=true; drag=false; sRow=td.parentNode.rowIndex; sCol=td.cellIndex; if(sel.size) return;
+  down=true; drag=false; sRow=td.parentNode.rowIndex; sCol=td.cellIndex;
+  if(sel.size) return;
 });
-window.addEventListener('pointerup',e=>{
+/* pointer up */
+window.addEventListener('pointerup', e=>{
   if(!down) return; down=false;
   if(drag){
     drag=false; lasso.style.display='none';
-    sel.clear(); tmp.forEach(td=>sel.add(td)); tmp.forEach(td=>preview(td.cellIndex)); tmp.clear(); saveAll(); return;
+    sel.clear(); tmpSel.forEach(td=>sel.add(td)); tmpSel.forEach(td=>preview(td.cellIndex)); tmpSel.clear();
+    saveAll(); return;
   }
   const td=hover; if(!td) return;
   if(sel.size){ sel.clear(); return; }
@@ -318,172 +358,171 @@ window.addEventListener('pointerup',e=>{
   if(isNote(td)) preview(td.cellIndex);
   clearFing(td); saveAll();
 });
-document.addEventListener('pointerdown',e=>{ if(!grid.contains(e.target)){
-  sel.clear(); grid.querySelectorAll('.selected').forEach(t=>t.classList.remove('selected')); } });
+/* click outside grid clears selection */
+document.addEventListener('pointerdown', e=>{
+  if(!grid.contains(e.target)){
+    sel.clear(); grid.querySelectorAll('.selected').forEach(t=>t.classList.remove('selected'));
+  }
+});
 
-/* Arrow moves & fingering edits (unchanged logic) */
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ sel.clear(); grid.querySelectorAll('.selected').forEach(t=>t.classList.remove('selected')); return; }
-
+/* keyboard shortcuts for moving selection + fingerings */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    sel.clear(); grid.querySelectorAll('.selected').forEach(t=>t.classList.remove('selected')); return;
+  }
   if(sel.size && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-    let dR=0,dC=0; if(e.key==='ArrowUp')dR=-1; if(e.key==='ArrowDown')dR=1; if(e.key==='ArrowLeft')dC=-1; if(e.key==='ArrowRight')dC=1;
+    let dR=0,dC=0; if(e.key==='ArrowUp')dR=-1; if(e.key==='ArrowDown')dR=1;
+    if(e.key==='ArrowLeft')dC=-1; if(e.key==='ArrowRight')dC=1;
     e.preventDefault();
-    for(const td of sel){ const r=td.parentNode.rowIndex+dR,c=td.cellIndex+dC;
-      if(r<0||r>=ROWS||c<0||c>=COLS) return; }
-    const moves=[]; sel.forEach(src=>{ const r=src.parentNode.rowIndex,c=src.cellIndex; moves.push([src,grid.rows[r+dR].cells[c+dC]]); });
-    moves.forEach(([s])=>{ s.classList.remove('on','blue','fingering','selected'); delete s.dataset.fing; s.innerHTML=''; });
+    for(const td of sel){
+      const r=td.parentNode.rowIndex+dR,c=td.cellIndex+dC;
+      if(r<0||r>=ROWS||c<0||c>=COLS) return;
+    }
+    const moves=[]; sel.forEach(src=>{
+      const r=src.parentNode.rowIndex, c=src.cellIndex;
+      moves.push([src, grid.rows[r+dR].cells[c+dC]]);
+    });
+    moves.forEach(([s])=>{
+      s.classList.remove('on','blue','fingering','selected');
+      delete s.dataset.fing; s.innerHTML='';
+    });
     moves.forEach(([src,dst])=>{
       dst.classList.add(src.classList.contains('blue')?'blue':'on','selected');
       if(src.dataset.fing){ dst.dataset.fing=src.dataset.fing; renderFings(dst); }
     });
     sel.clear(); moves.forEach(([,d])=>sel.add(d)); saveAll(); return;
   }
-
+  /* fingering digits */
   if(!hover || !isNote(hover)) return;
   if(['1','2','3','4','5'].includes(e.key)){ addFing(hover,e.key); saveAll(); }
   else{ clearFing(hover); saveAll(); }
 });
 
 /* ------------------------------------------------------------------
- * MANUAL PIANO TRACKING (mouse/touch) – unchanged
+ * MANUAL PIANO (mouse/touch)
  * ----------------------------------------------------------------*/
-const manualHeld=new Set();
-piano.addEventListener('pointerdown',e=>{
+piano.addEventListener('pointerdown', e=>{
   const k=e.target.closest('.key'); if(!k) return;
   k.classList.add('held'); manualHeld.add(k.dataset.note);
   sampler.triggerAttack(k.dataset.note,Tone.now());
 });
-window.addEventListener('pointerup',()=>{
+window.addEventListener('pointerup', ()=>{
   document.querySelectorAll('.key.held').forEach(k=>{
-    k.classList.remove('held'); manualHeld.delete(k.dataset.note);
+    k.classList.remove('held');
+    manualHeld.delete(k.dataset.note);
     sampler.triggerRelease(k.dataset.note,Tone.now());
   });
 });
 
 /* ------------------------------------------------------------------
- * PLAY BUTTON COLOUR
- * ----------------------------------------------------------------*/
-function setWaiting(wait){
-  playB.style.background = wait ? 'orange'
-                        : (timer ? 'green' : '');
-}
-
-/* ------------------------------------------------------------------
  * PLAYBACK ENGINE
  * ----------------------------------------------------------------*/
-let timer=null,rowPtr=0,lastRow=0,held=new Set(),beatEnd=0;
+let timer=null, rowPtr=0, lastRow=0, heldDuringPlay=new Set(), beatEnd=0;
 const msPerRow = () => 60000 / (+tempo.value || 120);
+
+const cursor = (()=>{                     // red playhead
+  const c=document.createElement('div');
+  c.id='cursor'; Object.assign(c.style,{position:'absolute',top:0,left:0,width:'100%',
+    height:'2px',background:'red',pointerEvents:'none',transform:'translateY(-2px)',
+    transition:'transform 0ms linear',zIndex:9999});
+  piano.parentNode.insertBefore(c, piano); return c;
+})();
+const wrap = (()=>{                       // wraps grid for scrolling
+  const w=document.createElement('div');
+  w.id='gridWrap'; Object.assign(w.style,{position:'relative',display:'inline-block',overflow:'hidden'});
+  grid.parentNode.insertBefore(w, grid); w.appendChild(grid);
+  return w;
+})();
+const lasso=document.createElement('div'); lasso.id='lasso'; wrap.appendChild(lasso);
+
+function resetVisuals(){
+  cursor.style.transition='transform 0ms linear'; cursor.style.transform='translateY(-2px)';
+  grid  .style.transition='transform 0ms linear'; grid  .style.transform='translateY(0)';
+}
 
 function findLastRow(){
   for(let r=ROWS-1;r>=0;r--){
     const cells=grid.rows[r].cells;
     for(let c=0;c<COLS;c++) if(isNote(cells[c])) return r;
-  }
-  return -1;
-}
-function resetVisuals(){
-  cursor.style.transition='transform 0ms linear'; cursor.style.transform='translateY(-2px)';
-  grid  .style.transition='transform 0ms linear'; grid  .style.transform='translateY(0px)';
+  } return -1;
 }
 
-/* ---------- Playback Mode step ---------- */
+function setWaiting(waiting){
+  playB.style.background = waiting ? 'orange' : (timer ? 'green' : '');
+}
+
+/* ----- playback-mode step ----- */
 function stepPlayback(){
   cursor.style.transitionDuration='0ms';
-  cursor.style.transform=`translateY(${rowPtr * ROW_PX}px)`;
-
-  held.forEach(n=>{
+  cursor.style.transform=`translateY(${rowPtr*ROW_PX}px)`;
+  /* release notes no longer active */
+  heldDuringPlay.forEach(n=>{
     const col=NOTES_LINEAR.indexOf(n);
     if(!grid.rows[rowPtr] || !isNote(grid.rows[rowPtr].cells[col])){
-      sampler.triggerRelease(n,Tone.now()); held.delete(n);
+      sampler.triggerRelease(n, Tone.now()); heldDuringPlay.delete(n);
     }
   });
+  /* trigger new notes */
   const cells=grid.rows[rowPtr].cells;
   for(let c=0;c<COLS;c++){
-    if(isNote(cells[c]) && !held.has(NOTES_LINEAR[c])){
-      sampler.triggerAttack(NOTES_LINEAR[c],Tone.now()); held.add(NOTES_LINEAR[c]);
+    if(isNote(cells[c]) && !heldDuringPlay.has(NOTES_LINEAR[c])){
+      sampler.triggerAttack(NOTES_LINEAR[c], Tone.now());
+      heldDuringPlay.add(NOTES_LINEAR[c]);
     }
   }
-
-  if(rowPtr++ >= lastRow){
-    pause();                               // stop — no loop in playback mode
-    return;
-  }
+  if(++rowPtr > lastRow){ pause(); return; }
   cursor.style.transitionDuration=msPerRow()+'ms';
-  cursor.style.transform=`translateY(${rowPtr * ROW_PX}px)`;
+  cursor.style.transform=`translateY(${rowPtr*ROW_PX}px)`;
 }
 
-/* ---------- Wait Mode helpers ---------- */
-function notesForRow(r){
-  const need=[]; if(r>=ROWS) return need;
+/* helpers for WAIT mode */
+const notesForRow=r=>{
+  const arr=[]; if(r>=ROWS) return arr;
   const cells=grid.rows[r].cells;
-  for(let c=0;c<COLS;c++) if(isNote(cells[c])) need.push(NOTES_LINEAR[c]);
-  return need;
-}
+  for(let c=0;c<COLS;c++) if(isNote(cells[c])) arr.push(NOTES_LINEAR[c]);
+  return arr;
+};
 
-/* ---------- Wait Mode step ------------- */
+/* ----- wait-mode step ----- */
 function stepWait(){
-  const now=Date.now();
-  if(now < beatEnd) return;                 // still scrolling this beat
-
-  const need=notesForRow(rowPtr);           // could be empty (silent row)
+  const now=Date.now(); if(now < beatEnd) return;
+  const need=notesForRow(rowPtr);
   const satisfied = need.every(n=>manualHeld.has(n));
-
   if(satisfied){
-    /* colour */
     setWaiting(false);
-
-    /* play any new attacks */
-    need.forEach(n=>{ if(!held.has(n)){ sampler.triggerAttack(n,Tone.now()); held.add(n);} });
-
-    /* prepare next beat */
-    const dur=msPerRow();
-    beatEnd = now + dur;
-
-    /* scroll grid */
+    need.forEach(n=>{ if(!heldDuringPlay.has(n)){ sampler.triggerAttack(n, Tone.now()); heldDuringPlay.add(n); }});
+    const dur=msPerRow(); beatEnd = now + dur;
     grid.style.transition=`transform ${dur}ms linear`;
-    grid.style.transform = `translateY(${- (rowPtr+1)*ROW_PX}px)`;
-    rowPtr++;
-
-    if(rowPtr > lastRow){
-      /* let final beat ring, then restart loop */
+    grid.style.transform=`translateY(${- (rowPtr+1)*ROW_PX}px)`;
+    if(++rowPtr > lastRow){
       clearInterval(timer); timer=null;
-      setTimeout(loopRestart, dur);
+      setTimeout(()=>{ stop(); play(); }, dur);       // loop automatically
     }
-  }else{
-    setWaiting(true);                       // waiting = orange
-  }
+  }else setWaiting(true);
 }
 
-/* ---------- loop restart helper -------- */
-function loopRestart(){
-  stopNotes(); resetVisuals(); play();      // restart only in WAIT mode
-}
-function stopNotes(){ held.forEach(n=>sampler.triggerRelease(n,Tone.now())); held.clear(); }
+/* helpers */
+function stopAllNotes(){ heldDuringPlay.forEach(n=>sampler.triggerRelease(n, Tone.now())); heldDuringPlay.clear(); }
 
-/* ---------- Play / Pause / Stop -------- */
+/* core controls */
 function play(){
   if(timer) return;
   rowPtr=0; resetVisuals(); lastRow=findLastRow();
-  if(lastRow<0){ alert('No notes to play in this workspace!'); return; }
-
+  if(lastRow<0){ alert('Nothing to play in this workspace!'); return; }
   if(modeDrop.value==='playback'){
-    setWaiting(false);
-    beatEnd = Date.now() + msPerRow();
-    stepPlayback();
-    timer=setInterval(stepPlayback, msPerRow());
+    setWaiting(false); beatEnd=Date.now()+msPerRow();
+    stepPlayback(); timer=setInterval(stepPlayback, msPerRow());
   }else{
-    setWaiting(true);
-    beatEnd=Date.now();                     // start immediately eligible
-    stepWait();
-    timer=setInterval(stepWait, 50);        // quick poll
+    setWaiting(true); beatEnd=Date.now();  // eligible immediately
+    stepWait(); timer=setInterval(stepWait, 50);      // poll often
   }
 }
-function pause(){ if(!timer) return; clearInterval(timer); timer=null; stopNotes(); setWaiting(false);}
+function pause(){ if(!timer) return; clearInterval(timer); timer=null; stopAllNotes(); setWaiting(false); }
 function stop (){ pause(); resetVisuals(); rowPtr=0; }
 
 /* ------------------------------------------------------------------
  * TRANSPORT BUTTONS
  * ----------------------------------------------------------------*/
-playB .addEventListener('click',play);
-pauseB.addEventListener('click',pause);
-stopB .addEventListener('click',stop);
+playB .addEventListener('click', play );
+pauseB.addEventListener('click', pause);
+stopB .addEventListener('click', stop );

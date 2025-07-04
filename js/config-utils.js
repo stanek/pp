@@ -1,21 +1,21 @@
 /* =====================================================================
  *  CONFIG-UTILS
- *  ─ Global constants, shared helpers, Tone.js sampler, and exports
- * ====================================================================*/
+ *  – Global constants, shared helpers, Tone.js sampler, and exports
+ * ===================================================================*/
 
 /* ---------------------------------------------------------------------
  *  Octave setup
  * --------------------------------------------------------------------*/
-const ALL_OCTAVES = [0, 1, 2, 3, 4, 5, 6, 7, 8];   // full 88-key span
-let   vStart      = 2;                             // first visible octave
-let   vEnd        = 5;                             // last  visible octave
+const ALL_OCTAVES = [0,1,2,3,4,5,6,7,8];   // full 88-key span
+let   vStart      = 2;                     // first visible octave (inclusive)
+let   vEnd        = 5;                     // last  visible octave (inclusive)
 
 /* ---------------------------------------------------------------------
  *  Core constants
  * --------------------------------------------------------------------*/
 const MAX_WS     = 10;
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const SAMPLE_ROOTS = ['A','C','D#','F#'];          // samples available in set
+const SAMPLE_ROOTS = ['A','C','D#','F#'];          // roots available in set
 
 const ROWS = 200;
 const COLS = ALL_OCTAVES.length * NOTE_NAMES.length;   // 9 × 12 = 108 columns
@@ -45,7 +45,7 @@ const noteNameToMidi = n => {
 const midiToNoteName = m => NOTE_NAMES[m % 12] + (Math.floor(m/12) - 1);
 
 /* ---------------------------------------------------------------------
- *  Tone.js Sampler  (limit to octaves 1-7; Salamander lacks others)
+ *  Tone.js Sampler (limit to octaves 1-7; Salamander lacks others)
  * --------------------------------------------------------------------*/
 const VALID_OCTS = ALL_OCTAVES.filter(o => o >= 1 && o <= 7);
 
@@ -62,13 +62,13 @@ const sampler = new Tone.Sampler({
 }).toDestination();
 
 /* ---------------------------------------------------------------------
- *  Shared note/fingering state
+ *  Shared note / fingering helpers
  * --------------------------------------------------------------------*/
-const manualHeld = new Set();                     // live notes (mouse + MIDI)
+const manualHeld = new Set();                     // live notes from mouse + MIDI
 
-/* Draw fingering digits inside a grid cell */
+/* draw one- or two-digit fingering in a cell */
 function renderFings(td){
-  const d = (td.dataset.fing || '').slice(-2);    // keep last 2 chars
+  const d = (td.dataset.fing || '').slice(-2);
   if (!d){
     td.innerHTML = '';
     td.classList.remove('fingering');
@@ -80,7 +80,14 @@ function renderFings(td){
   td.classList.add('fingering');
 }
 
-/* Clear fingering from a grid cell (exported for grid-events.js) */
+/* add a digit (keeps last two, avoids duplicates) */
+function addFing(td, digit){
+  if ((td.dataset.fing || '').includes(digit)) return;
+  td.dataset.fing = ((td.dataset.fing || '') + digit).slice(-2);
+  renderFings(td);
+}
+
+/* remove fingering */
 function clearFing(td){
   delete td.dataset.fing;
   td.innerHTML = '';
@@ -88,7 +95,7 @@ function clearFing(td){
 }
 
 /* ---------------------------------------------------------------------
- *  Visible-column helper used by many modules
+ *  Column-visibility helper
  * --------------------------------------------------------------------*/
 const colVisible = col => {
   const oct = ALL_OCTAVES[Math.floor(col / NOTE_NAMES.length)];
@@ -96,10 +103,10 @@ const colVisible = col => {
 };
 
 /* ---------------------------------------------------------------------
- *  Export everything other modules rely on
+ *  Export everything needed elsewhere
  * --------------------------------------------------------------------*/
 Object.assign(window, {
-  /* octave window (these mutate elsewhere) */
+  /* octave window (mutable) */
   ALL_OCTAVES, vStart, vEnd,
 
   /* numeric constants */
@@ -110,8 +117,9 @@ Object.assign(window, {
   pcOf, NOTES_LINEAR, NAT_PC, MAJ, MIN,
   noteNameToMidi, midiToNoteName,
 
-  /* audio + live state */
-  sampler, manualHeld, renderFings, clearFing,
+  /* audio + shared state */
+  sampler, manualHeld,
+  renderFings, addFing, clearFing,
 
   /* visibility */
   colVisible

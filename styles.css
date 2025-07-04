@@ -77,8 +77,6 @@ td   {padding:0;text-align:center;}
 .seq td.selected{background:var(--sel)!important;}
 
 /* fingering numbers */
-/* .seq td.fingering{color:#fff;font-size:.8rem;font-weight:700;
-                  line-height:var(--cell);text-align:center;} */
 /* render two stacked digits nicely */
 .fing{
   position:absolute;
@@ -166,4 +164,4 @@ td   {padding:0;text-align:center;}
 .modal-content button{margin-top:1rem;padding:.4rem .9rem;}
 
 #pianoContainer { position: relative; }
-td.availableCell { background:#ededed; }
+td.availableCell { background:#9d4991; }

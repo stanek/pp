@@ -4,20 +4,22 @@
   <meta charset="UTF-8" />
   <title>Playable Piano Sequencer</title>
 
-  <!-- Tone.js -->
+  <!-- third-party libs -->
   <script src="https://unpkg.com/tone@latest/build/Tone.js"></script>
+
+  <!-- our CSS -->
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-  <!-- workspace tabs ------------------------------------------------>
+  <!-- workspace tabs -->
   <div id="workspaceBar">
     <button id="addWS">＋</button>
     <div id="tabs"></div>
   </div>
 
-  <!-- key selectors ------------------------------------------------->
+  <!-- key / mode selectors -->
   <div id="keySelect">
     <label>Key
       <select id="tonicSelect">
@@ -34,9 +36,8 @@
     </select>
   </div>
 
-  <!-- transport ----------------------------------------------------->
+  <!-- transport controls -->
   <div id="transport">
-
     <button id="playBtn">▶︎ Play</button>
     <button id="pauseBtn">‖ Pause</button>
     <button id="stopBtn">■ Stop</button>
@@ -51,10 +52,17 @@
     </label>
   </div>
 
-  <!-- piano + grid -------------------------------------------------->
+  <!-- piano & grid -->
   <table id="piano"></table>
-  <table id="grid" class="seq"></table>
+  <table id="grid"  class="seq"></table>
 
-  <script defer src="script.js"></script>
+  <!-- our JavaScript – ORDER MATTERS! -->
+  <script defer src="js/config-utils.js"></script>
+  <script defer src="js/ui-build.js"></script>
+  <script defer src="js/midi-calibration.js"></script>
+  <script defer src="js/workspaces.js"></script>
+  <script defer src="js/grid-events.js"></script>
+  <script defer src="js/playback-engine.js"></script>
+  <script defer src="js/main.js"></script>
 </body>
 </html>

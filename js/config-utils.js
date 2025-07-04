@@ -1,10 +1,11 @@
 /* ================================================================
- *  Global configuration, constants & utility helpers
+ *  Global configuration, constants & shared helpers
  * ===============================================================*/
-const MAX_WS = 10;
 
-const OCTAVES      = [2,3,4,5];
-const NOTE_NAMES   = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+/* ---------- core constants -------------------------------------- */
+const MAX_WS     = 10;
+const OCTAVES    = [2,3,4,5];
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const SAMPLE_ROOTS = ['A','C','D#','F#'];
 
 const ROWS = 200;
@@ -39,3 +40,37 @@ const sampler = new Tone.Sampler({
   ),
   baseUrl: 'https://tonejs.github.io/audio/salamander/'
 }).toDestination();
+
+/* ================================================================
+ *  NEW 🔸  Shared finger-number utilities + live-held notes set
+ * ===============================================================*/
+
+/* notes currently held by mouse or MIDI – shared across modules */
+const manualHeld = new Set();
+
+/* Render / clear two-digit fingering widgets inside a grid cell */
+function renderFings(td){
+  const d = (td.dataset.fing || '').slice(-2);   // keep last 2 digits
+  if (!d){
+    td.innerHTML = '';
+    td.classList.remove('fingering');
+    return;
+  }
+  td.innerHTML = (d.length === 1)
+    ? `<div class="fing single">${d}</div>`
+    : `<div class="fing top">${d[0]}</div><div class="fing bot">${d[1]}</div>`;
+  td.classList.add('fingering');
+}
+
+/* ---------------------------------------------------------------
+ *  Expose everything that other modules need
+ * --------------------------------------------------------------*/
+Object.assign(window, {
+  MAX_WS, OCTAVES, NOTE_NAMES, ROWS, COLS, CELL_PX, ROW_PX,
+  PREVIEW_DUR, STORE_KEY,
+  pcOf, NOTES_LINEAR, NAT_PC, MAJ, MIN,
+  noteNameToMidi, midiToNoteName,
+  sampler,
+  manualHeld,          // 🔸 used by MIDI + mouse handlers
+  renderFings          // 🔸 used by workspaces.js & grid-events.js
+});

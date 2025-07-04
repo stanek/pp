@@ -13,13 +13,21 @@
 
 <body>
 
-  <!-- workspace tabs -->
-  <div id="workspaceBar">
+<!-- workspace bar ------------------------------------------------>
+<div id="workspaceBar">
+  <!-- top row: Add button + tabs -->
+  <div class="wsTop">
     <button id="addWS">＋</button>
     <div id="tabs"></div>
   </div>
 
-  <!-- key / mode selectors -->
+  <!-- bottom row: Clear / Delete -->
+  <div class="wsBottom">
+    <button id="clearWS">🧹 Clear WS</button>
+    <button id="deleteWS">✖ Delete WS</button>
+  </div>
+
+    <!-- key / mode selectors -->
   <div id="keySelect">
     <label>Key
       <select id="tonicSelect">
@@ -35,6 +43,9 @@
       <option value="minor">Minor</option>
     </select>
   </div>
+</div>
+
+
 
   <!-- transport controls -->
   <div id="transport">
@@ -53,8 +64,10 @@
   </div>
 
   <!-- piano & grid -->
-  <table id="piano"></table>
-  <table id="grid"  class="seq"></table>
+  <div id="pianoContainer">
+    <table id="piano"></table>
+    <table id="grid"  class="seq"></table>
+  </div>
 
   <!-- our JavaScript – ORDER MATTERS! -->
   <script defer src="js/config-utils.js"></script>

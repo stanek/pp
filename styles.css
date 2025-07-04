@@ -165,3 +165,64 @@ td   {padding:0;text-align:center;}
 
 #pianoContainer { position: relative; }
 td.availableCell { background:#9d4991; }
+
+/* NEW ▸ hide anything with .hiddenCol */
+.hiddenCol           { display:none; }
+.hiddenCol > *       { display:none; }
+
+/* NEW ▸ tiny range-handle buttons */
+.rangeBtn{
+  cursor:pointer;
+  user-select:none;
+  padding:0 .35rem;
+  font-weight:bold;
+  background:#eee;
+  border:1px solid #aaa;
+  border-radius:4px;
+  font-family:system-ui;
+}
+.rangeBtn:hover{ background:#ddd; }
+
+/* range-handle overlays */
+.rangeWrap{
+  position:absolute;           /* take out of normal flow */
+  top:0;                       /* flush with octave row */
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.rangeWrap.left  { left:0px;  }   /* tweak offsets to taste */
+.rangeWrap.right { right:0px; }
+.rangeBtn{
+  cursor:pointer;
+  user-select:none;
+  padding:0 .35rem;
+  font-weight:bold;
+  background:#eee;
+  border:1px solid #aaa;
+  border-radius:4px;
+  font-family:system-ui;
+  line-height:1.1;
+  color: black;
+}
+.rangeBtn:hover{ background:#ddd; }
+/* workspace bar layout */
+#workspaceBar{
+  display:inline-flex;
+  flex-direction:column;
+  gap:4px;               /* space between the two rows */
+  margin-bottom:8px;     /* space above the piano header */
+}
+
+/* top row: Add + tabs */
+.wsTop{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+/* bottom row: Clear / Delete */
+.wsBottom{
+  display:flex;
+  gap:6px;
+}
